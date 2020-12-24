@@ -35,6 +35,11 @@
 #include "plt.h"
 #include "vitals.h"
 
+#ifdef MMK_ARCH_ARM64
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
 #if MMK_BITS == 32
 typedef struct mach_header mach_hdr;
 typedef struct nlist sym;
@@ -222,12 +227,15 @@ plt_offset *plt_get_offsets(plt_ctx ctx, plt_lib lib, const char *name, size_t *
     plt_offset *ot = mmk_malloc(sizeof (plt_offset) * (n - 1));
 
     static const char *gots[] = {
-        "__la_symbol_ptr", "__nl_symbol_ptr", "__got"
+        "__la_symbol_ptr", "__nl_symbol_ptr", "__got", "__got"
+    };
+    static const char *segs[] = {
+        SEG_DATA, SEG_DATA, SEG_DATA, SEG_DATA "_CONST"
     };
 
     size_t offidx = 0;
     for (size_t sidx = 0; sidx < sizeof (gots) / sizeof (char *); ++sidx) {
-        const section *got = get_section(hdr, SEG_DATA, gots[sidx]);
+        const section *got = get_section(hdr, segs[sidx], gots[sidx]);
         if (!got)
             continue;
 
@@ -247,6 +255,13 @@ void plt_set_offsets(plt_offset *offset, size_t nb_off, plt_fn *newval)
     for (size_t i = 0; i < nb_off; ++i) {
         if (!offset[i].oldval)
             offset[i].oldval = *offset[i].offset;
+#ifdef MMK_ARCH_ARM64
+        const long page_size = sysconf(_SC_PAGESIZE);
+        mmk_assert(page_size > 0);
+        char *page_start = (char *) (((uintptr_t) offset[i].offset) & ~(page_size - 1));
+        mmk_assert(!mprotect (page_start, page_size, PROT_READ | PROT_WRITE));
+        __clear_cache(page_start, page_start + page_size);
+#endif
         *offset[i].offset = newval;
     }
 }

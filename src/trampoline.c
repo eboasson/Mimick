@@ -54,7 +54,11 @@ plt_fn *create_trampoline(void *ctx, plt_fn *routine)
 
 # if defined HAVE_MMAP_MAP_ANONYMOUS
     void **map = mmap(NULL, PAGE_SIZE,
+#   if !defined __APPLE__
             PROT_READ | PROT_WRITE | PROT_EXEC,
+#   else
+            PROT_READ | PROT_WRITE,
+#   endif
             MAP_PRIVATE | MAP_ANONYMOUS,
             -1, 0);
 # elif defined HAVE_MMAP_MAP_ANON
